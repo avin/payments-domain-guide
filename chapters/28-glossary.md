@@ -115,7 +115,7 @@ PSP Attempt:             txn_01H8F3A2
 
 ### Order ID / merchant reference
 
-Идентификатор заказа в мире мерчанта. У «Кофейни» — `ORD-2026-0918-0042` (в архитектурных примерах [гл. 20](20-platform-architecture.md) иногда фигурирует другой иллюстративный `ord_coffee_88421` — смысл тот же: **магазинный** id). Живёт в OMS, письмах клиенту, складе. В PSP обычно кладут в `metadata.order_id` / `merchant_reference`. Путаница: сделать order id единственным ключом идемпотентности *и* первичным ключом платежа в PSP — коллизии и повторные оплаты ломают сверку. Подробнее: [Глава 07](07-states-async-idempotency.md), [Глава 20](20-platform-architecture.md).
+Идентификатор заказа в мире мерчанта. У «Кофейни» — `ORD-2026-0918-0042` (в архитектурных примерах [гл. 20](20-platform-architecture.md) иногда фигурирует другой иллюстративный `ord_coffee_88421` — смысл тот же: **магазинный** id). Живёт в системе управления заказами (OMS), письмах клиенту, складе. В PSP обычно кладут в `metadata.order_id` / `merchant_reference`. Путаница: сделать order id единственным ключом идемпотентности *и* первичным ключом платежа в PSP — коллизии и повторные оплаты ломают сверку. Подробнее: [Глава 07](07-states-async-idempotency.md), [Глава 20](20-platform-architecture.md).
 
 ### Payment ID / pay_…
 
@@ -163,7 +163,7 @@ PSP Attempt:             txn_01H8F3A2
 
 ### Statement descriptor
 
-Текст (или его основа), который Аня видит в банковской выписке и push-уведомлении эмитента. Различают hard/soft descriptor и правила схем/эквайеров по длине, префиксам и допустимым символам — детали зависят от канала. Для «Кофейни» здравый пример духа: `COFFEEHOUSE.EU`. Descriptor — антифрод-инструмент против friendly fraud: если в выписке `PAY*X7K2`, Аня не узнаёт покупку зерна и открывает dispute. Это не order id и не место «зашить ORD-2026-0918-0042 целиком» (часто не влезет и не везде поддерживается динамика). Путаница: считать descriptor косметикой маркетинга. Подробнее: [Глава 16](16-fraud.md), [Глава 17](17-chargebacks-and-disputes.md), [Глава 25](25-merchant-domain.md).
+Текст (или его основа), который Аня видит в банковской выписке и push-уведомлении эмитента. Различают hard descriptor — закреплённый за мерчантом текст — и soft descriptor — динамический текст для операции, а также правила схем/эквайеров по длине, префиксам и допустимым символам — детали зависят от канала. Для «Кофейни» здравый пример духа: `COFFEEHOUSE.EU`. Descriptor — антифрод-инструмент против friendly fraud: если в выписке `PAY*X7K2`, Аня не узнаёт покупку зерна и открывает dispute. Это не order id и не место «зашить ORD-2026-0918-0042 целиком» (часто не влезет и не везде поддерживается динамика). Путаница: считать descriptor косметикой маркетинга. Подробнее: [Глава 16](16-fraud.md), [Глава 17](17-chargebacks-and-disputes.md), [Глава 25](25-merchant-domain.md).
 
 ### BIN / IIN
 
@@ -175,7 +175,7 @@ PSP Attempt:             txn_01H8F3A2
 
 ### PAN (Primary Account Number)
 
-Номер карты — то, что люди называют «номером на пластике». CHD под PCI; в нормальной архитектуре мерчант его не хранит. Пример отображения: `4242 **** **** 4242`. Путаница: логировать PAN в plaintext «на час для дебага». Подробнее: [Глава 03](03-bank-card-anatomy.md), [Глава 19](19-payment-security-pci.md).
+Номер карты — то, что люди называют «номером на пластике». Относится к данным держателя карты (CHD) в контуре стандарта PCI DSS; в нормальной архитектуре мерчант его не хранит. Пример отображения: `4242 **** **** 4242`. Путаница: логировать PAN в plaintext «на час для дебага». Подробнее: [Глава 03](03-bank-card-anatomy.md), [Глава 19](19-payment-security-pci.md).
 
 ### Payment Method ID (pm_…)
 
@@ -195,7 +195,7 @@ PSP Attempt:             txn_01H8F3A2
 
 ### Event ID / webhook delivery id
 
-Идентификатор события и/или попытки доставки webhook. Нужен, чтобы отличать «тот же факт» от «повторная доставка». Путаница: идемпотентность только по `pi_…` без типа события → повторный credit на балансе. Подробнее: [Глава 07](07-states-async-idempotency.md).
+Идентификатор события и/или попытки доставки webhook. Нужен, чтобы отличать «тот же факт» от «повторная доставка»: `event_id` сохраняется при повторе, delivery id идентифицирует конкретную доставку. Путаница: идемпотентность только по `pi_…` без типа события → повторный credit на балансе. Подробнее: [Глава 07](07-states-async-idempotency.md).
 
 ---
 
@@ -230,7 +230,7 @@ flowchart LR
 
 ### Response code
 
-Код ответа авторизации из рельсов карточной сети/процессора (в ISO 8583 классически смотрят DE39): `00` — approve, `51` — недостаточно средств, `05` — do not honor, и дальше зоопарк. Это *сырая* правда канала, не UX-текст для Ани. Даже если публичный API «Платёжки» отдаёт `failure_code: "insufficient_funds"`, сырой response code обязан лежать в `raw` / на Attempt: без него вы не поспорите с эквайером и не построите адекватную аналитику soft/hard. Путаница: один и тот же `05` у разных эмитентов трактовать одной политикой retry. Подробнее: [Глава 09](09-declines-and-response-codes.md).
+Код ответа авторизации из рельсов карточной сети/процессора (в ISO 8583 классически смотрят элемент данных №39, DE39): `00` — approve, `51` — недостаточно средств, `05` — do not honor, и дальше зоопарк. Это *сырая* правда канала, не UX-текст для Ани. Даже если публичный API «Платёжки» отдаёт `failure_code: "insufficient_funds"`, сырой response code обязан лежать в `raw` / на Attempt: без него вы не поспорите с эквайером и не построите адекватную аналитику soft/hard. Путаница: один и тот же `05` у разных эмитентов трактовать одной политикой retry. Подробнее: [Глава 09](09-declines-and-response-codes.md).
 
 ### Decline code
 
@@ -250,7 +250,7 @@ Soft: имеет смысл повторить при изменении усл�
 
 ### AVS / CVV result codes
 
-Результаты проверки адреса и CVV — отдельные поля, не всегда равны «decline». Approve с CVV fail бывает; это сигнал риска, не синоним response code. Подробнее: [Глава 09](09-declines-and-response-codes.md), [Глава 16](16-fraud.md).
+AVS (Address Verification Service) проверяет адрес держателя, CVV — защитный код карты. Результаты этих проверок — отдельные поля, не всегда равны «decline». Approve с CVV fail бывает; это сигнал риска, не синоним response code. Подробнее: [Глава 09](09-declines-and-response-codes.md), [Глава 16](16-fraud.md).
 
 ### HTTP status vs payment status
 
@@ -298,7 +298,7 @@ Soft: имеет смысл повторить при изменении усл�
 
 ### MDR / blended / IC++
 
-Модели цены для мерчанта: blended MDR «всё в одной ставке» vs IC++ (interchange + scheme + acquirer markup прозрачно). В примере Ани комиссия «Платёжки» 0,76 EUR → зачисление 41,74 — иллюстративный разрез. Подробнее: [Глава 15](15-fees-and-economics.md).
+MDR (Merchant Discount Rate) — плата продавца за приём карточных платежей. Модели цены для мерчанта: blended MDR «всё в одной ставке» vs IC++ (interchange + scheme + acquirer markup прозрачно). В примере Ани комиссия «Платёжки» 0,76 EUR → зачисление 41,74 — иллюстративный разрез. Подробнее: [Глава 15](15-fees-and-economics.md).
 
 ### Merchant balance: pending vs available
 
@@ -310,11 +310,11 @@ Pending — признали обязательство, но ещё нельз�
 
 ### Rolling reserve / held funds
 
-Удержание части оборота как подушка под chargeback и риск. Уменьшает available. Подробнее: [Глава 12](12-flow-of-funds.md), [Глава 25](25-merchant-domain.md).
+Rolling reserve удерживает долю поступлений на заданный срок; held funds — средства, недоступные по отдельной причине, например из-за открытого спора. Оба уменьшают available, но освобождаются по разным правилам. Подробнее: [Глава 12](12-flow-of-funds.md), [Глава 25](25-merchant-domain.md).
 
 ### Ledger (леджер)
 
-Учётная книга с проводками: финансовая правда обязательств. Не заменяется таблицей `payments`. Пример: capture 42,50 + fee 0,76 → payable 41,74. Подробнее: [Глава 13](13-ledger-and-reconciliation.md).
+Учётная книга с проводками: финансовая правда обязательств. Не заменяется таблицей `payments`. Пример: capture 42,50 + fee 0,76 → обязательство PSP перед продавцом (payable) 41,74. Подробнее: [Глава 13](13-ledger-and-reconciliation.md).
 
 ### Double-entry
 
@@ -370,7 +370,7 @@ Pending — признали обязательство, но ещё нельз�
 
 ### Dispute / representment
 
-Управление спором: evidence, representment (оспорить chargeback), pre-arbitration, arbitration. Подробнее: [Глава 17](17-chargebacks-and-disputes.md).
+Dispute — спор по платежу; evidence — доказательства продавца. Representment — повторное предъявление операции с этими доказательствами для оспаривания chargeback; pre-arbitration и arbitration — дальнейшие стадии разбирательства по правилам схемы. Подробнее: [Глава 17](17-chargebacks-and-disputes.md).
 
 ### Chargeback reason code
 
@@ -394,7 +394,7 @@ Pending — признали обязательство, но ещё нельз�
 
 ### PCI DSS
 
-Стандарт безопасности данных держателя карты: scope, уровни, SAQ/RoC, требования к хранению и обработке CHD. Способ уменьшить scope — не трогать PAN (hosted fields, tokenizer). Подробнее: [Глава 19](19-payment-security-pci.md).
+Стандарт безопасности данных держателя карты: scope (область систем и процессов под действием стандарта), уровни проверки, SAQ (анкета самооценки) / RoC (отчёт о проверке), требования к хранению и обработке данных держателя карты (CHD). Способ уменьшить scope — не трогать PAN (hosted fields, tokenizer). Подробнее: [Глава 19](19-payment-security-pci.md).
 
 ### CHD (Cardholder Data)
 
@@ -478,7 +478,7 @@ Buy Now Pay Later: кредитный/рассрочечный слой пове
 
 ### Digital wallet (staged / pass-through)
 
-Кошелёк как funding+spend или как токенизированный pass-through к схеме (Apple Pay / Google Pay). Подробнее: [Глава 11](11-wallets-bnpl-local-methods.md).
+Staged-кошелёк сначала пополняют (funding), затем тратят его баланс (spend). Pass-through-кошелёк передаёт токенизированный инструмент в обычный платёжный контур, как Apple Pay / Google Pay. Подробнее: [Глава 11](11-wallets-bnpl-local-methods.md).
 
 ### SMS vs DMS
 
@@ -502,7 +502,7 @@ Single-message vs Dual-message: auth+capture одним сообщением и�
 
 ### Exactly-once vs at-least-once
 
-В распределённых системах доставка обычно at-least-once; финансовый exactly-once достигается идемпотентностью и леджером, не магией очереди. Подробнее: [Глава 21](21-distributed-systems-and-money.md).
+At-least-once означает доставку хотя бы один раз с возможными повторами; exactly-once — один эффект обработки. В распределённых системах доставка обычно at-least-once; финансовый exactly-once достигается идемпотентностью и леджером, не магией очереди. Подробнее: [Глава 21](21-distributed-systems-and-money.md).
 
 ### Outbox pattern
 
@@ -510,7 +510,7 @@ Single-message vs Dual-message: auth+capture одним сообщением и�
 
 ### ISO 8583 / MTI / DE
 
-Классический карточный обмен: Message Type Indicator, Data Elements (bitmap). RRN/STAN/response живут здесь. Подробнее: [Глава 22](22-integrations.md).
+Классический карточный обмен: MTI (Message Type Indicator) задаёт тип сообщения, DE (Data Elements) — его поля; bitmap отмечает, какие поля присутствуют. RRN/STAN/response живут здесь. Подробнее: [Глава 22](22-integrations.md).
 
 ### ISO 20022
 
@@ -518,7 +518,7 @@ Single-message vs Dual-message: auth+capture одним сообщением и�
 
 ### KYC / KYB / UBO
 
-Идентификация клиента, бизнеса и бенефициаров при onboarding. Без этого нет нормального MID. Подробнее: [Глава 18](18-regulation-and-compliance.md), [Глава 25](25-merchant-domain.md).
+KYC — проверка личности клиента, KYB — проверка бизнеса, UBO — конечный человек, владеющий бизнесом или контролирующий его. Эти проверки нужны при onboarding. Без этого нет нормального MID. Подробнее: [Глава 18](18-regulation-and-compliance.md), [Глава 25](25-merchant-domain.md).
 
 ### AML / sanctions screening
 
@@ -559,7 +559,7 @@ Payment Institution и Electronic Money Institution — типы лицензи�
 
 ### Мини-алгоритм для on-call
 
-1. Есть order, нет ci_/pi_? → сначала PSP search по `merchant_reference`.
+1. Есть order, нет pay_/pi_? → сначала PSP search по `merchant_reference`.
 2. Есть pi_, несколько txn_? → не гадайте: смотрите captured/settled attempt.
 3. Спор/chargeback? → ARN обязателен; параллельно поднимите evidence по order.
 4. «Банк пишет, что операции нет»? → проверьте, дошёл ли запрос до эквайера (fraud block / timeout / не тот MID).
